@@ -1,9 +1,10 @@
+import sys
 from io import BytesIO
 import requests
 from PIL import Image
 from second_file import get_size_toponym
 
-toponym_to_find = input()
+toponym_to_find = " ".join(sys.argv[1:])
 
 geocoder_api_server = "http://geocode-maps.yandex.ru/1.x/"
 
