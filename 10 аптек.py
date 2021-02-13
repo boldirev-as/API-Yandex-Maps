@@ -1,9 +1,9 @@
+# -*- coding: utf-8 -*-
 import math
 import sys
 from io import BytesIO
 import requests
 from PIL import Image
-from second_file import get_size_toponym
 
 
 def lonlat_distance(a, b):
@@ -24,19 +24,34 @@ def lonlat_distance(a, b):
     return distance
 
 
-toponym_to_find = " ".join(sys.argv[1:])
+def spn_counter(coords):
+    if len(coords) >= 2:
+        coords = [[float(coord[0]), float(coord[1])] for coord in coords]
+        point_a = coords[0]
+        min_long = 0
+        min_index = 1
+        for i, point_b in enumerate(coords):
+            long = lonlat_distance(point_a, point_b)
+            if long > min_long:
+                min_long = long
+                min_index = i
+        spn = max(round(abs(float(point_a[1]) - float(coords[min_index][1])), 6),
+                  round(abs(float(point_a[0]) - float(coords[min_index][0])), 6))
+        return spn, spn
+    return 0.2, 0.2
+
+
+toponym_to_find = input()  # " ".join(sys.argv[1:])
 
 geocoder_api_server = "http://geocode-maps.yandex.ru/1.x/"
 
 geocoder_params = {
     "apikey": "40d1649f-0493-4b70-98ba-98533de7710b",
     "geocode": toponym_to_find,
-    "format": "json"}
+    "format": "json"
+}
 
 response = requests.get(geocoder_api_server, params=geocoder_params)
-
-if not response:
-    pass
 
 json_response = response.json()
 toponym_start = json_response["response"]["GeoObjectCollection"][
@@ -47,9 +62,7 @@ toponym_longitude_start, toponym_lattitude_start = toponym_coodrinates_start.spl
 # поиск аптеки
 search_api_server = "https://search-maps.yandex.ru/v1/"
 api_key = "dda3ddba-c9ea-4ead-9010-f43fbc15c6e3"
-
 address_ll = ",".join([toponym_longitude_start, toponym_lattitude_start])
-
 search_params = {
     "apikey": api_key,
     "text": "аптека",
@@ -61,48 +74,32 @@ search_params = {
 response = requests.get(search_api_server, params=search_params)
 if not response:
     sys.exit(1)
-
-# Преобразуем ответ в json-объект
 json_response = response.json()
-
 # Получаем первую найденную организацию.
-organization = json_response["features"][0]
-# Название организации.
-org_name = organization["properties"]["CompanyMetaData"]["name"]
-# Адрес организации.
-org_address = organization["properties"]["CompanyMetaData"]["address"]
-org_hours = organization["properties"]["CompanyMetaData"]["Hours"]["text"]
+organizations = json_response["features"][:12]
 
-# Получаем координаты ответа.
-point = organization["geometry"]["coordinates"]
-org_point = "{0},{1}".format(point[0], point[1])
-
-geocoder_params = {
-    "apikey": "40d1649f-0493-4b70-98ba-98533de7710b",
-    "geocode": org_address,
-    "format": "json"}
-
-response = requests.get(geocoder_api_server, params=geocoder_params)
-
-if not response:
-    pass
-
-json_response = response.json()
-toponym = json_response["response"]["GeoObjectCollection"][
-    "featureMember"][0]["GeoObject"]
+ll = ",".join(map(str, toponym_coodrinates_start.split(" ")))
+spn = ",".join(map(str, spn_counter([toponym_coodrinates_start.split(" ")] +
+                                    [org['geometry']['coordinates'] for org in organizations])))
+pt = list()
+for i, org in enumerate(organizations):
+    hours = org["properties"]["CompanyMetaData"]["Hours"]["Availabilities"][0]
+    color = "bl"
+    if any("TwentyFourHours" in key for key in hours.keys()):
+        color = "gn"
+    elif len(hours.keys()) == 0:
+        color = "gr"
+    pt.append(f"{','.join(map(str, org['geometry']['coordinates']))},pm2{color}m{i + 1}")
 
 map_params = {
-    "ll": org_point,
-    "spn": ",".join(map(str, get_size_toponym(toponym))),
+    "ll": ll,
+    "spn": spn,
     "l": "map",
-    "pt": f"{org_point},pm2grm2~{toponym_longitude_start},{toponym_lattitude_start},pm2blm1"
+    "pt": "~".join(pt)
 }
 
 map_api_server = "http://static-maps.yandex.ru/1.x/"
 response = requests.get(map_api_server, params=map_params)
-print(org_address, org_name, org_hours,
-      f"{round(lonlat_distance(point, map(float, (toponym_longitude_start, toponym_lattitude_start))))} метров",
-      sep="\n")
 
 Image.open(BytesIO(
     response.content)).show()
