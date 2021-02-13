@@ -41,7 +41,7 @@ def spn_counter(coords):
     return 0.2, 0.2
 
 
-toponym_to_find = input()  # " ".join(sys.argv[1:])
+toponym_to_find = " ".join(sys.argv[1:])
 
 geocoder_api_server = "http://geocode-maps.yandex.ru/1.x/"
 
